@@ -1,47 +1,63 @@
-const sha256 = require('js-sha256').sha256
+const crypto = require('crypto');
+const blocks = [];
 
-const blockchain = (function(){
-  const blocks = []
+module.exports = {
+    add,
+    init,
+    list,
+    addNumbers
+}
 
-  const initBlockchain = () => {
-    const data = 'Hello World!'
-    const timestamp = new Date()
-    const previousHash = 0
-    const index = 0
-    hashBlock(data, timestamp, previousHash, index)
-  }
+function init(hash) {
+    let data = 'In the beginning...';
+    let seedHash = hash || '00001234';
+    return add(data, seedHash);
+}
 
-  const hashBlock = (data, timestamp, prevHash, index) => {
-    let hash = '', nonce = 0
+function add(data, lastHash) {
+    return hashData(data, lastHash)
+        .then(function (hash) {
+            return blocks.push(hash);
+        });
+}
 
-    while( !isHashValid(hash) ){
-      let input = `${data}${timestamp}${prevHash}${index}${nonce}`
-      hash = sha256(input)
-      nonce += 1
+function hashData(data, lastHash) {
+    let index = blocks.length;
+    lastHash = (lastHash || list(-1, 1)).toString();
+    let input = `${data}${Date.now()}${lastHash}${index}`;
+    return new Promise(function (resolve, reject) {
+        calculateHash(0);
+        function calculateHash(nonce) {
+            let hash = crypto.createHmac('sha256', lastHash)
+                .update(input + nonce)
+                .digest('hex');
+
+            if (hashIsValid(hash)) {
+                console.log(nonce)
+                return resolve(hash);
+            }
+
+            process.nextTick(function () {
+                calculateHash(nonce + 1);
+            });
+        }
+    });
+}
+
+function list(offset, items) {
+    if (offset === undefined) {
+        return blocks;
     }
-    console.log(nonce)
-    blocks.push(hash)
-  }
 
-  const getLastHash = blocks => blocks.slice(-1)[0]
+    if (items === undefined) {
+        return blocks.slice(offset)
+    }
 
-  const isHashValid = hash => hash.startsWith('0000') // Difficulty
+    return blocks.slice(offset, offset + items);
+}
 
-  const addNewBlock = data => {
-    const index = blocks.length
-    const previousHash = getLastHash(blocks)
-    hashBlock(data, new Date(), previousHash, index)
-  }
 
-  const getAllBlocks = () => blocks
 
-  return {
-    initBlockchain,
-    getLastHash,
-    blocks,
-    getAllBlocks,
-    addNewBlock
-  }
-})()
-
-module.exports = blockchain
+function hashIsValid(hash) {
+    return hash.substring(0, 4) === '0000'; // Difficulty
+}
